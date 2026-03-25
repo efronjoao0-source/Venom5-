@@ -1,0 +1,106 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: userKeys
+    // Document ID: keyId (the key string itself)
+    // Fields:
+    //   - key: string (required)
+    //   - isBanned: boolean (required)
+    //   - expiresAt: number (optional)
+    //
+    // Collection: appSettings
+    // Document ID: settingId (e.g., 'global')
+    // Fields:
+    //   - isBotOpen: boolean (required)
+    //   - botClosedMessage: string (required)
+    //   - adminPassword: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      let userDoc = /databases/$(database)/documents/users/$(request.auth.uid);
+      return isAuthenticated() &&
+        ((exists(userDoc) && get(userDoc).data.role == 'admin') ||
+          (request.auth.token.email == "efronjoao9@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+             request.resource.data[field].size() >= minLen &&
+             request.resource.data[field].size() <= maxLen;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUserKey(data) {
+      return hasRequiredFields(['key', 'isBanned']) &&
+             hasOnlyAllowedFields(['key', 'isBanned', 'expiresAt']) &&
+             data.key is string && data.key.size() >= 1 && data.key.size() <= 64 &&
+             data.isBanned is bool &&
+             (!('expiresAt' in data) || data.expiresAt == null || data.expiresAt is number);
+    }
+
+    function isValidAppSetting(data) {
+      return hasRequiredFields(['isBotOpen', 'botClosedMessage', 'adminPassword']) &&
+             hasOnlyAllowedFields(['isBotOpen', 'botClosedMessage', 'adminPassword']) &&
+             data.isBotOpen is bool &&
+             data.botClosedMessage is string && data.botClosedMessage.size() <= 512 &&
+             data.adminPassword is string && data.adminPassword.size() >= 1 && data.adminPassword.size() <= 128;
+    }
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'displayName']) &&
+             hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'role', 'lastLogin']) &&
+             data.uid == request.auth.uid &&
+             data.email is string && data.email.size() <= 128 &&
+             data.displayName is string && data.displayName.size() <= 128 &&
+             (!('role' in data) || data.role in ['user', 'admin']);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /userKeys/{keyId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidUserKey(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /appSettings/{settingId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidAppSetting(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow create, update: if isAuthenticated() && request.auth.uid == userId && 
+                             isValidUser(request.resource.data) &&
+                             (!request.resource.data.keys().hasAny(['role']) || isAdmin());
+    }
+  }
+}

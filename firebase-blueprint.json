@@ -1,0 +1,36 @@
+{
+  "entities": {
+    "UserKey": {
+      "title": "UserKey",
+      "description": "A user access key.",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "description": "The key string." },
+        "isBanned": { "type": "boolean", "description": "Whether the key is banned." },
+        "expiresAt": { "type": "number", "description": "Expiration timestamp in milliseconds." }
+      },
+      "required": ["key", "isBanned"]
+    },
+    "AppSetting": {
+      "title": "AppSetting",
+      "description": "Global application settings.",
+      "type": "object",
+      "properties": {
+        "isBotOpen": { "type": "boolean", "description": "Whether the bot is open." },
+        "botClosedMessage": { "type": "string", "description": "Message to show when the bot is closed." },
+        "adminPassword": { "type": "string", "description": "Password for the admin panel." }
+      },
+      "required": ["isBotOpen", "botClosedMessage", "adminPassword"]
+    }
+  },
+  "firestore": {
+    "/userKeys/{keyId}": {
+      "schema": "UserKey",
+      "description": "Collection of user access keys."
+    },
+    "/appSettings/{settingId}": {
+      "schema": "AppSetting",
+      "description": "Collection of global application settings."
+    }
+  }
+}
